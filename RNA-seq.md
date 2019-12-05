@@ -340,8 +340,21 @@ make a slurm file to run trinity: 'nano trinity.slurm'
 
 this should take about 30 mins to run will output a new directory called `trinty_out_dir` that will contain your new transcriptome assembly as `Trinity.fasta`
 
+
+**Discussion:** How can you tell if your assembly is a good assembly?
+
+https://github.com/trinityrnaseq/trinityrnaseq/wiki/Transcriptome-Assembly-Quality-Assessment
+
+What is N50? https://www.molecularecologist.com/2017/03/whats-n50/
+
+Does it matter for transcriptomes?
+https://www.molecularecologist.com/2017/05/n50-for-transcriptome-assemblies/
+
 ---------
-if left over time, we will download dammit annotation databases for tomorrow    
+#### Transcriptome Annotation and Quality Assessment with Dammit
+http://dib-lab.github.io/dammit/
+
+download dammit annotation databases    
 https://dammit.readthedocs.io/en/refactor-1.0/databases.html
 
 move back to the skillpill directory: `cd ..`
@@ -372,4 +385,107 @@ make a slurm file for downloading dammit databases: `nano dammit_db.slurm`
     dammit databases --install --database-dir /home/m/maggi-brisbin/RNAseq/dammit_db --busco-group eukaryota
 *remember to change the user name*
 
-run this slurm file - it will take about 30 minutes to download all the databases
+run this slurm file
+
+Annotate your transcriptome assembly:
+
+`cd ..` to your RNAseq directory    
+`mkdir yeast_dammit` and `cd yeast_dammit`
+
+make a slurm file for running the annotation: `nano dammit.slurm`
+
+    #!/bin/bash
+
+    #SBATCH --job-name=dammit
+    #SBATCH --partition=compute
+    #SBATCH --time=6:30:00
+    #SBATCH --mem=12G
+    #SBATCH --cpus-per-task=12
+    #SBATCH --nodes=1
+    #SBATCH --mail-user=%u@oist.jp
+    #SBATCH --mail-type=END
+    #SBATCH --input=none
+    #SBATCH --output=dammit_%j.out
+    #SBATCH --error=dammit_%j.err
+
+    module use /work/scratch/skillpill/.modulefiles
+    module load RNA-seq/1.0
+
+    dammit annotate /home/m/maggi-brisbin/RNAseq/yeast_trinity/trinity_out_dir/Trinity.fasta --busco-group eukaryota --n_threads 12 --database-dir /home/m/maggi-brisbin/RNAseq/dammit_db
+
+#### Read Mapping and Counting
+
+Salmon is a super fast tool for read mapping and counting:
+https://combine-lab.github.io/salmon/
+
+Step one is to index your reference transcriptome (or genome, if you're using a genome):
+
+`cd ..` to your RNAseq directory    
+`mkdir yeast_salmon` and `cd yeast_salmon`
+
+make a slurm file to index your rerence: `nano salmon_index.slurm`
+
+    #!/bin/bash
+
+    #SBATCH --job-name=salmonindex
+    #SBATCH --partition=compute
+    #SBATCH --time=1:00:00
+    #SBATCH --mem=10G
+    #SBATCH --nodes=1
+    #SBATCH --mail-user=%u@oist.jp
+    #SBATCH --mail-type=NONE
+    #SBATCH --input=none
+    #SBATCH --output=salmonindex_%j.out
+    #SBATCH --error=salmonindex_%j.err
+
+    source ~/.bashrc
+
+    REF=/home/m/maggi-brisbin/RNAseq/yeast_trinity/trinity_out_dir/
+    salmon index -t $REF/Trinity.fasta -i yeast_index
+
+ctrl o --> save   
+press enter   
+ctrl x --> exit     
+
+run the slurm file with `sbatch`
+
+once the reference is indexed, we can map and count our trimmed reads to the indexed reference:
+
+`nano salmon_quant.slurm`
+
+    #!/bin/bash
+
+    #SBATCH --job-name=sal_quant
+    #SBATCH --partition=compute
+    #SBATCH --time=1:30:00
+    #SBATCH --mem=10G
+    #SBATCH --nodes=1
+    #SBATCH --mail-user=%u@oist.jp
+    #SBATCH --mail-type=NONE
+    #SBATCH --input=none
+    #SBATCH --output=sal_quant_%j.out
+    #SBATCH --error=sal_quant_%j.err
+    #SBATCH --array 493,494,495,500,501,502
+
+    source ~/.bashrc
+
+    DATA=/home/m/maggi-brisbin/RNAseq/yeast_trimmed/
+
+    salmon quant -i yeast_index -l A \
+    -r $DATA/ERR${SLURM_ARRAY_TASK_ID}.qc.fastq.gz \
+    -p 10 --validateMappings -o quants/ERR458${SLURM_ARRAY_TASK_ID}.qc.fq.gz_quant
+
+
+
+
+example if running paired-end data:         
+
+    salmon quant -i PC_index -l A \
+    -1 $DATA2/A${SLURM_ARRAY_TASK_ID}_1_paired.fq \
+    -2 $DATA2/A${SLURM_ARRAY_TASK_ID}_2_paired.fq \
+    -p 10 --validateMappings -o quants2/A${SLURM_ARRAY_TASK_ID}_quant
+
+---------
+***we will copy the quant files to our local computer and continue the analysis in R ***
+
+`scp -r maggi-brisbin@tombo.oist.jp:/home/m/maggi-brisbin/RNAseq1/yeast_salmon/quants  .`
