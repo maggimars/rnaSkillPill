@@ -26,8 +26,8 @@ devtools::install_github("karthik/wesanderson")
 BiocManager::install("org.Sc.sgd.db")
 BiocManager::install("GOstats")
 BiocManager::install("edgeR")
+BiocManager::install("tximport")
 install.packages("treemap")
-
 install.packages("tidyverse")
 install.packages("ggplot2")
 ```
@@ -59,9 +59,20 @@ samples <- read_csv("https://osf.io/cxp2w/download")
 samples
 ```
 
+```{r}
+samples <- samples %>% mutate(quant_file = str_sub(quant_file, 3))
+
+samples
+```
+
 Import tx 2 gene file: 
 ```{r}
-tx2gene_map <- read_tsv("https://osf.io/a75zm/download")
+#tx2gene_map <- read_tsv("https://osf.io/a75zm/download")
+
+tx <- read.table("quant/ERR458493.qc.fq.gz_quant/quant.sf", header = TRUE)
+tx2gene_map <- data.frame(tx$Name, tx$Name)
+names(tx2gene_map) <-  c("TXNAME", "GENEID")
+
 txi <- tximport(files = samples$quant_file, type = "salmon", tx2gene = tx2gene_map)
 colnames(txi$counts) <- samples$sample
 ```
@@ -89,6 +100,26 @@ Summarize results
 ```{r}
 summary(res, alpha = 0.05) # default significance cut-off is 0.1, changing alpha to 0.05 changes the significance cut-off 
 ```
+
+**Why p-adj?** Multiple testing problems come up when doing multiple statistical tests simultaneously. Here, we are performing 9,474 individual statistical tests. We first need to think about the definifition p-value: the p-value is the probability of attaining the observed result by chance. So if we use a p-value cut off of 0.05, 5% of the time our results will represent chance outcomes rather than real effects. This is fine in one test. For that one test we are 95% confident that are results are real. But if we do 9,474 tests, 473 genes could be *significantly* differentially expressed, just by chance -- there is a false positive problem.
+
+FDR (False Discovery Rate) adjusted p-values controls for the expected rate of false positives. The p-adj is almost always higher than the p-value. Controlling for multiple testing has the downside of increasing the possibility of false negatives. 
+
+Some researchers also set a cut-off for minimum expression and minimum log fold-changes.
+
+If you want to use a log fold-change cut off:
+```{r}
+res_lfcut <- results(dds, lfcThreshold = 1, altHypothesis = "greaterAbs")
+summary(res_lfcut, alpha = 0.05)
+```
+
+
+Lets say you wanted the comparison to be in the other direction:
+```{r}
+res_rev <- results(dds, contrast=c("condition","wt", "snf2"))
+head(res_rev)
+```
+
 
 # Visualizing RNA-seq results 
 
@@ -223,6 +254,19 @@ pheatmap(sampleDistMatrix,
          clustering_distance_cols=sampleDists,
          col=colors)
 ```
+
+
+## MA plot
+
+```{r}
+DESeq2::plotMA(res, alpha = 0.05, ylim = c(-2,2))
+#default alpha is 0.1
+```
+
+```{r}
+DESeq2::plotMA(vsd)
+```
+
 
 # Gene Set Enrichment Testing 
 If you remember, we had  598 significantly upregulated genes and 1049 significantly down regulated genes in this data set (this is pretty typical). That is a lot to try to make sense of. If you know you are interested in a specific gene or a specific pathway, you can look for that in your data, but if you are trying to figure out what is generally different betwene treatments, it helps to categaorize and summarize genes by what they do. Two common ways to do this are GO terms and KEGG pathways.

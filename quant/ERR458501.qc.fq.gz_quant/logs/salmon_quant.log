@@ -1,0 +1,41 @@
+[2019-12-11 12:26:04.522] [jointLog] [info] Fragment incompatibility prior below threshold.  Incompatible fragments will be ignored.
+[2019-12-11 12:26:04.522] [jointLog] [info] Usage of --validateMappings implies use of minScoreFraction. Since not explicitly specified, it is being set to 0.65
+[2019-12-11 12:26:04.522] [jointLog] [info] Usage of --validateMappings implies a default consensus slack of 0.2. Setting consensusSlack to 0.35.
+[2019-12-11 12:26:04.522] [jointLog] [info] parsing read library format
+[2019-12-11 12:26:04.522] [jointLog] [info] There is 1 library.
+[2019-12-11 12:26:04.926] [jointLog] [info] Loading pufferfish index
+[2019-12-11 12:26:04.926] [jointLog] [info] Loading dense pufferfish index.
+[2019-12-11 12:26:05.748] [jointLog] [info] done
+[2019-12-11 12:26:05.748] [jointLog] [info] Index contained 9,475 targets
+[2019-12-11 12:26:05.756] [jointLog] [info] Number of decoys : 0
+[2019-12-11 12:26:05.756] [jointLog] [info] First decoy index : 18,446,744,073,709,551,615 
+[2019-12-11 12:26:06.877] [jointLog] [info] Automatically detected most likely library type as U
+[2019-12-11 12:26:20.554] [fileLog] [info] 
+At end of round 0
+==================
+Observed 1869889 total fragments (1869889 in most recent round)
+
+[2019-12-11 12:26:20.554] [jointLog] [info] Computed 10,338 rich equivalence classes for further processing
+[2019-12-11 12:26:20.554] [jointLog] [info] Counted 1,743,372 total reads in the equivalence classes 
+[2019-12-11 12:26:20.561] [jointLog] [warning] 0.000320875% of fragments were shorter than the k used to build the index.
+If this fraction is too large, consider re-building the index with a smaller k.
+The minimum read size found was 25.
+
+
+[2019-12-11 12:26:20.561] [jointLog] [info] Number of mappings discarded because of alignment score : 22,049
+[2019-12-11 12:26:20.561] [jointLog] [info] Number of fragments entirely discarded because of alignment score : 6,133
+[2019-12-11 12:26:20.561] [jointLog] [info] Number of fragments discarded because they are best-mapped to decoys : 0
+[2019-12-11 12:26:20.561] [jointLog] [info] Number of fragments discarded because they have only dovetail (discordant) mappings to valid targets : 0
+[2019-12-11 12:26:20.562] [jointLog] [warning] Only 1743372 fragments were mapped, but the number of burn-in fragments was set to 5000000.
+The effective lengths have been computed using the observed mappings.
+
+[2019-12-11 12:26:20.562] [jointLog] [info] Mapping rate = 93.234%
+
+[2019-12-11 12:26:20.562] [jointLog] [info] finished quantifyLibrary()
+[2019-12-11 12:26:20.565] [jointLog] [info] Starting optimizer
+[2019-12-11 12:26:20.568] [jointLog] [info] Marked 0 weighted equivalence classes as degenerate
+[2019-12-11 12:26:20.569] [jointLog] [info] iteration = 0 | max rel diff. = 176.616
+[2019-12-11 12:26:21.169] [jointLog] [info] iteration = 100 | max rel diff. = 0.00352597
+[2019-12-11 12:26:21.188] [jointLog] [info] Finished optimizer
+[2019-12-11 12:26:21.188] [jointLog] [info] writing output 
+

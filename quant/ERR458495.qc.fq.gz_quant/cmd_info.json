@@ -1,0 +1,10 @@
+{
+    "salmon_version": "1.0.0",
+    "index": "yeast_index",
+    "libType": "A",
+    "unmatedReads": "/home/m/maggi-brisbin/RNAseq1/yeast_trimmed/ERR495.qc.fastq",
+    "threads": "10",
+    "validateMappings": [],
+    "output": "quants/ERR458495",
+    "auxDir": "aux_info"
+}

@@ -469,11 +469,11 @@ once the reference is indexed, we can map and count our trimmed reads to the ind
 
     source ~/.bashrc
 
-    DATA=/home/m/maggi-brisbin/RNAseq/yeast_trimmed/
+    DATA=/home/m/maggi-brisbin/RNAseq/yeast_trimmed
 
     salmon quant -i yeast_index -l A \
-    -r $DATA/ERR${SLURM_ARRAY_TASK_ID}.qc.fastq.gz \
-    -p 10 --validateMappings -o quants/ERR458${SLURM_ARRAY_TASK_ID}.qc.fq.gz_quant
+    -r $DATA/ERR${SLURM_ARRAY_TASK_ID}.qc.fastq \
+    -p 10 --validateMappings -o quant/ERR458${SLURM_ARRAY_TASK_ID}.qc.fq.gz_quant
 
 
 
@@ -483,9 +483,9 @@ example if running paired-end data:
     salmon quant -i PC_index -l A \
     -1 $DATA2/A${SLURM_ARRAY_TASK_ID}_1_paired.fq \
     -2 $DATA2/A${SLURM_ARRAY_TASK_ID}_2_paired.fq \
-    -p 10 --validateMappings -o quants2/A${SLURM_ARRAY_TASK_ID}_quant
+    -p 10 --validateMappings -o quant/A${SLURM_ARRAY_TASK_ID}_quant
 
 ---------
-***we will copy the quant files to our local computer and continue the analysis in R ***
+***we will copy the quant files to our local computer and continue the analysis in R***
 
-`scp -r maggi-brisbin@tombo.oist.jp:/home/m/maggi-brisbin/RNAseq1/yeast_salmon/quants  .`
+`scp -r maggi-brisbin@tombo.oist.jp:/home/m/maggi-brisbin/RNAseq/yeast_salmon/quants  .`
