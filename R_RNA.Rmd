@@ -61,7 +61,6 @@ samples
 
 ```{r}
 samples <- samples %>% mutate(quant_file = str_sub(quant_file, 3))
-
 samples
 ```
 
