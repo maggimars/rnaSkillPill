@@ -2,7 +2,7 @@
 
 OIST Skill Pill on analyzing RNA-seq data, from raw reads to functional enrichment analysis.
 
-December 4, 5, 11, & 12; 3-5pm
+2019 December 4, 5, 11, & 12; 3-5pm
 
 Main lesson materials are in:   
 `RNA-seq.md`        
