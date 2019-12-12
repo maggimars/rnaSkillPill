@@ -1,6 +1,15 @@
 ---
 title: "R_RNA"
-output: html_document
+output:
+  html_document:
+    number_sections: yes
+    theme: cerulean
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '5'
 ---
 
 ```{r setup, include=FALSE}
@@ -15,23 +24,23 @@ Read the docs: https://bioconductor.org/packages/release/bioc/vignettes/DESeq2/i
 
 Installs:
 ```{r}
-if (!requireNamespace("BiocManager", quietly = TRUE))
-    install.packages("BiocManager") # calls the package from the source
-BiocManager::install("GSEAbase")
-BiocManager::install("clusterProfiler")
-install.packages("devtools")
-install.packages("RColorBrewer")
-install.packages("pheatmap")
-devtools::install_github("karthik/wesanderson")
-BiocManager::install("org.Sc.sgd.db")
-BiocManager::install("GOstats")
-BiocManager::install("edgeR")
-BiocManager::install("tximport")
-install.packages("treemap")
-install.packages("tidyverse")
-install.packages("ggplot2")
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager") # calls the package from the source
+# BiocManager::install("GSEAbase")
+# BiocManager::install("clusterProfiler")
+# install.packages("devtools")
+# install.packages("RColorBrewer")
+# install.packages("pheatmap")
+# devtools::install_github("karthik/wesanderson")
+# BiocManager::install("org.Sc.sgd.db")
+# BiocManager::install("GOstats")
+# BiocManager::install("edgeR")
+# BiocManager::install("tximport")
+# BiocManager::install("DESeq2")
+# install.packages("treemap")
+# install.packages("tidyverse")
+# install.packages("ggplot2")
 ```
-
 
 Load Libraries: 
 ```{r, warning = FALSE, message = FALSE}
@@ -105,6 +114,8 @@ summary(res, alpha = 0.05) # default significance cut-off is 0.1, changing alpha
 FDR (False Discovery Rate) adjusted p-values controls for the expected rate of false positives. The p-adj is almost always higher than the p-value. Controlling for multiple testing has the downside of increasing the possibility of false negatives. 
 
 Some researchers also set a cut-off for minimum expression and minimum log fold-changes.
+
+ADD REFERENCES!!!
 
 If you want to use a log fold-change cut off:
 ```{r}
@@ -258,21 +269,92 @@ pheatmap(sampleDistMatrix,
 ## MA plot
 
 ```{r}
-DESeq2::plotMA(res, alpha = 0.05, ylim = c(-2,2))
+DESeq2::plotMA(res, alpha = 0.05, ylim = c(-10,10))
 #default alpha is 0.1
 ```
 
-```{r}
-DESeq2::plotMA(vsd)
-```
-
-
 # Gene Set Enrichment Testing 
-If you remember, we had  598 significantly upregulated genes and 1049 significantly down regulated genes in this data set (this is pretty typical). That is a lot to try to make sense of. If you know you are interested in a specific gene or a specific pathway, you can look for that in your data, but if you are trying to figure out what is generally different betwene treatments, it helps to categaorize and summarize genes by what they do. Two common ways to do this are GO terms and KEGG pathways.
+If you remember, we had 774 significantly upregulated genes and 1194 significantly down regulated genes in this data set (this is pretty typical). That is a lot to try to make sense of. If you know you are interested in a specific gene or a specific pathway, you can look for that in your data, but if you are trying to figure out what is generally different between treatments, it helps to categaorize and summarize genes by what they do. Two common ways to do this are GO terms and KEGG pathways.
 
 ```{r}
 summary(res, alpha = 0.05)
 ```
+
+## Annotations
+we need to line up our pfam and GOannotatations with the differential expression results
+```{r}
+#get dataframe of significantly differentially expressed genes
+DEres <- as.data.frame(res)
+DEres$trinity <- row.names(DEres)
+sigDEgenes <- subset(DEres, padj < 0.05)
+sigDEgenes$trinity <- row.names(sigDEgenes)
+```
+
+Import and wrangle Pfam anotations
+```{r}
+pfamAnnotation <- read_csv("Trinity.fasta.x.pfam-A.csv") %>% group_by(query_name) %>% filter(rank(full_evalue, ties.method="first")==1) %>% arrange(query_name) %>% separate(target_accession, c("Pfam", "version"), sep = "\\.") %>% dplyr::select(Pfam, target_name, description, query_name)
+
+length(pfamAnnotation$Pfam)
+```
+4939 out of 9462 "genes" have good Pfam annotations
+
+
+GO term to pfam mapping is available from: [http://current.geneontology.org/ontology/external2go/pfam2go](http://current.geneontology.org/ontology/external2go/pfam2go).  
+
+import and wrangle pfam2go mapping file:
+```{r}
+pfam2go <- read.delim("pfam2go4R.txt", header = FALSE) %>%
+  separate(V1, c('V1_1', 'V1_2'), sep = '>') %>%
+  separate(V1_1, c("Pfam", "name"), sep = " ") %>%
+  separate(V1_2, c("GO_desc", "GO"), sep = ";") %>% mutate(GO = str_sub(GO, 2)) %>% mutate(Pfam= str_sub(Pfam, 6))
+```
+
+Merger pfam annotations and pfam2GO mapping:
+```{r}
+pfamGO <- left_join(as_tibble(pfamAnnotation), as_tibble(pfam2go))
+#how many unique pfam annotations with GO terms?
+length(unique(pfamGO$Pfam))
+```
+2296 have GO terms -- 27%
+
+import and wrangle trinity name to dammit rename file:
+```{r}
+namemap<-read_csv("Trinity.fasta.dammit.namemap.csv") %>% separate(original, c("trinity"), sep = " ") %>% rename(query_name = "renamed")
+
+
+finalmapping<- right_join(namemap, pfamGO)
+```
+
+```{r}
+#(format transcript to GO mapping for GOstats)
+GOdf <- data.frame(finalmapping$trinity, finalmapping$GO)
+GOdf$evidence <- "ISS"
+names(GOdf) <- c("isoform", "GO", "evidence")
+#reorder columns
+GOdf <- GOdf[,c("GO","evidence","isoform")]  
+GOdf$GO <- as.character(GOdf$GO)
+GOdf$isoform<- as.character(GOdf$isoform)
+goframe=GOFrame(GOdf)
+goAllFrame=GOAllFrame(goframe)
+gsc <- GeneSetCollection(goAllFrame, setType = GOCollection())
+
+
+universe <-namemap$trinity 
+```
+
+
+```{r}
+sigDEgenes <- subset(DEres, padj < 0.05)
+sigAnnotated <- left_join(sigDEgenes, finalmapping)
+
+#make list of upregulated genes
+sigDEup <- sigDEgenes[sigDEgenes$log2FoldChange >0,] 
+uplist <- sigDEup$trinity
+#make list of downregulated genes
+sigDEdown<- sigDEgenes[sigDEgenes$log2FoldChange <0,]
+downlist <- sigDEdown$trinity
+```
+
 
 ## GO term enrichment
 
@@ -282,115 +364,223 @@ Different pieces of knowledge regarding gene function may be established to diff
 
 
 ```{r}
-GO_df = toTable(org.Sc.sgdGO)
-head(GO_df)
-```
-
-This frame comes with all three types of GO terms in one frame, BP = Biological Process, MF = Molecular Function, CC = Cellular COmponenet  
-
-
-Convert the df to the format required for GOstats:
-```{r}
-goframeData = data.frame(GO_df$go_id, GO_df$Evidence, GO_df$systematic_name)
-names(goframeData) = c("GO", "Evidence", "gene_id")
-goframeData$GO <- as.character(goframeData$GO)
-goframeData$Evidence <- as.character(goframeData$Evidence)
-goframeData$gene_id <- as.character((goframeData$gene_id))
-head(goframeData)
-```
-
-Now turn this into a GO frame for GOstats:
-```{r, warning = FALSE, message= FALSE}
-goFrame<- GOFrame(goframeData)
-goAllFrame<- GOAllFrame(goFrame)
-gsc <- GeneSetCollection(goAllFrame, setType = GOCollection())
-```
-
-### GO terms enriched in UP regulated genes:
-
-get data frame of DESeq2 results:
-```{r}
-DEres <- as.data.frame(res)
+#GOterm enrichment in up-regulated genes:
+upregulated = hyperGTest(
+  GSEAGOHyperGParams(name = "snf2 upregged",
+                     geneSetCollection=gsc,geneIds = uplist,
+                     universeGeneIds=universe,ontology = "BP",pvalueCutoff = 0.05,conditional = FALSE,testDirection = "over"))
+upregulated
+htmlReport(upregulated, file="enrichedUPgostats.html")
+upgoterms <-data.frame(summary(upregulated))
+#write.csv(upgoterms,"upgo.csv")
 ```
 
 ```{r}
-upFrame <- DEres[DEres$padj <= 0.05 & DEres$log2FoldChange >= 1,]
-upFrame <- upFrame[complete.cases(upFrame),]
-dim(upFrame)
-```
-(by selecting genes with a log2 fold change >1 or <-1, we decrease the number of genes we consider --> this is a 2x change )
-we now have 175 upregulated genes to consider (rather than 598)
-
-```{r}
-universe = Lkeys(org.Sc.sgdGO)
-
-genes = row.names(upFrame)
-params <- GSEAGOHyperGParams(name="Yeast, wt v. snf2", geneSetCollection= gsc, geneIds = genes, universeGeneIds = universe, ontology = "BP", pvalueCutoff = 0.05, conditional = TRUE, testDirection = "over")
-
-Over <- hyperGTest(params)
-
-Over
+upgoterms$Term
 ```
 
-## Enrichr (edgeR package)
 
-```{r}
-SC <- toTable(org.Sc.sgdGENENAME)
+**GOterm enrichment among significantly DOWNreguated genes:**
+```{r, echo=FALSE}
+downregulated = hyperGTest(
+  GSEAGOHyperGParams(name = "Symbiosis DownRegged",
+                     geneSetCollection=gsc,geneIds = downlist,
+                     universeGeneIds=universe,ontology = "BP",pvalueCutoff = 0.05,conditional = FALSE,testDirection = "over"))
 
-DEres <- as.data.frame(res)
-DEres$systematic_name<- row.names(DEres)
-DEres<- merge(DEres, SC, by="systematic_name")
-
-gene <- DEres$gene_name
-
-gene.df <- bitr(gene, fromType = "GENENAME",
-        toType = c("ENTREZID", "ENSEMBL"),
-        OrgDb = org.Sc.sgd.db)
-names(gene.df)<- c("gene_name", "EntrezID", "ENSEMBL" )
-
-go.df <- bitr(gene, fromType = "GENENAME",
-        toType = c("GO"),
-        OrgDb = org.Sc.sgd.db)
-names(go.df)<- c("gene_name", "GO", "evidence", "ontology")
-
-DEres<- merge(DEres, gene.df, by = "gene_name" )
-
-go_dict <- merge(go.df, gene.df, by= "gene_name")
-
-BPdict <- go_dict[go_dict$ontology == "BP", ]
-
-BPdict<- BPdict[,c(2,6)]
-
-upFrame <- DEres[DEres$padj <= 0.05 & DEres$log2FoldChange > 0.0,]
-upFrame <- upFrame[complete.cases(upFrame),]
-
-universe<- DEres$systematic_name
-gene <- upFrame$systematic_name
-
-enrchdUP_GO<-enricher(gene, pAdjustMethod = "none", universe, pvalueCutoff = 0.05,TERM2GENE= BPdict)
-
-upBP_GOs <- data.frame(enrchdUP_GO)
-
-upBP_GOs
+downregulated
+#htmlReport(downregulated, file = "enrichedDOWNgostats.html")
+downgoterms <- data.frame(summary(downregulated))
+#write.csv(downgoterms,"downgo.csv")
 ```
 
-```{r}
-upBP_GOs$ID
+
+
+##ReviGO Plot to visualize GO term enrichment results
+
+Results were imported into [ReviGO]("http://revigo.irb.hr/"), summarizes long lists of GO terms by removing redundant terms and clustering terms with similar meanings.
+```{r, echo= FALSE}
+Down4revi <-as.data.frame(downgoterms$GOBPID) 
+names(Down4revi) <- c("id")
+Down4revi$updown <- 0
+up4revi <-as.data.frame(upgoterms$GOBPID)
+names(up4revi)<-c("id")
+up4revi$updown <- 1
+revi<-rbind(up4revi, Down4revi)
+write.csv(revi, "revi.csv")
 ```
 
-*could do the same the thing with Molecular Function (MF) or cellular component (CC) GO terms*
-
-### REVIGO
-http://revigo.irb.hr/
-
-REVIGO is an online tool that helps summarize and visualize long lists of GO terms 
 
 ```{r}
-revigo.names <- c("term_ID","description","freqInDbPercent","uniqueness","dispensability","representative");
-revigo.data <- rbind(c("GO:0016192","vesicle-mediated transport",1.085,0.567,0.000,"vesicle-mediated transport"),
-c("GO:0019344","cysteine biosynthetic process",0.131,0.502,0.000,"cysteine biosynthesis"),
-c("GO:0006333","chromatin assembly or disassembly",0.120,0.236,0.311,"cysteine biosynthesis"),
-c("GO:0042407","cristae formation",0.013,0.294,0.120,"cysteine biosynthesis"));
+revigo.names <- c("term_ID","description","frequency_%","plot_X","plot_Y","plot_size","value","uniqueness","dispensability");
+revigo.data <- rbind(c("GO:0000726","non-recombinational repair", 0.050,-2.710, 3.637, 3.811, 1.0000,0.837,0.000),
+c("GO:0008152","metabolic process",75.387, 0.614,-2.095, 6.986, 0.0000,0.997,0.000),
+c("GO:0009117","nucleotide metabolic process", 4.166,-4.553,-3.763, 5.728, 0.0000,0.466,0.000),
+c("GO:0034220","ion transmembrane transport", 3.528, 6.208,-2.001, 5.656, 1.0000,0.774,0.000),
+c("GO:0051179","localization",18.495, 0.415,-0.039, 6.375, 1.0000,0.992,0.000),
+c("GO:0065008","regulation of biological quality", 3.395, 1.278,-5.548, 5.639, 1.0000,0.970,0.000),
+c("GO:0071840","cellular component organization or biogenesis", 8.568, 1.853,-3.991, 6.041, 1.0000,0.990,0.000),
+c("GO:0007029","endoplasmic reticulum organization", 0.032, 4.009, 4.791, 3.617, 1.0000,0.941,0.021),
+c("GO:0009056","catabolic process", 4.820, 2.523,-1.180, 5.791, 0.0000,0.964,0.022),
+c("GO:0071554","cell wall organization or biogenesis", 0.950, 2.900,-2.495, 5.086, 1.0000,0.946,0.027),
+c("GO:0009058","biosynthetic process",31.611, 2.398,-2.009, 6.608, 0.0000,0.956,0.033),
+c("GO:0042737","drug catabolic process", 0.001, 0.782, 3.197, 2.286, 0.0000,0.900,0.042),
+c("GO:0090407","organophosphate biosynthetic process", 4.110,-5.521, 2.779, 5.722, 1.0000,0.580,0.055),
+c("GO:0017144","drug metabolic process", 0.058, 0.462,-1.061, 3.868, 0.0000,0.929,0.056),
+c("GO:0046486","glycerolipid metabolic process", 0.593,-2.347,-7.356, 4.881, 1.0000,0.774,0.072),
+c("GO:1901135","carbohydrate derivative metabolic process", 6.319, 1.524, 0.788, 5.909, 1.0000,0.913,0.075),
+c("GO:0006733","oxidoreduction coenzyme metabolic process", 1.273, 0.639, 3.927, 5.213, 0.0000,0.865,0.079),
+c("GO:0006091","generation of precursor metabolites and energy", 1.940, 2.105, 1.217, 5.396, 0.0000,0.903,0.084),
+c("GO:0010467","gene expression",19.671,-0.620, 6.991, 6.402, 0.0000,0.881,0.093),
+c("GO:0005975","carbohydrate metabolic process", 5.260, 0.741, 2.005, 5.829, 0.0000,0.902,0.098),
+c("GO:0006000","fructose metabolic process", 0.022,-3.320,-6.041, 3.458, 1.0000,0.762,0.116),
+c("GO:0006388","tRNA splicing, via endonucleolytic cleavage and ligation", 0.040,-2.601, 4.599, 3.706, 1.0000,0.828,0.157),
+c("GO:0006112","energy reserve metabolic process", 0.168,-1.526,-7.706, 4.334, 0.0000,0.809,0.195),
+c("GO:0016051","carbohydrate biosynthetic process", 1.079,-6.138,-3.253, 5.141, 0.0000,0.688,0.204),
+c("GO:0072524","pyridine-containing compound metabolic process", 1.351,-5.667,-0.357, 5.239, 0.0000,0.764,0.228),
+c("GO:0043603","cellular amide metabolic process", 6.879,-5.153, 0.910, 5.946, 0.0000,0.804,0.242),
+c("GO:0032507","maintenance of protein location in cell", 0.057, 3.601,-5.348, 3.868, 1.0000,0.672,0.255),
+c("GO:1901137","carbohydrate derivative biosynthetic process", 3.651,-5.366, 3.669, 5.671, 1.0000,0.764,0.255),
+c("GO:1901564","organonitrogen compound metabolic process",17.886,-5.069, 1.674, 6.361, 0.0000,0.810,0.264),
+c("GO:1901576","organic substance biosynthetic process",30.365,-5.821, 3.462, 6.591, 0.0000,0.780,0.275),
+c("GO:0052803","imidazole-containing compound metabolic process", 0.420,-6.364,-0.441, 4.732, 0.0000,0.788,0.289),
+c("GO:0006839","mitochondrial transport", 0.182, 6.220,-0.937, 4.369, 1.0000,0.874,0.296),
+c("GO:0015931","nucleobase-containing compound transport", 0.198, 5.878,-1.374, 4.404, 1.0000,0.833,0.299),
+c("GO:0055114","oxidation-reduction process",15.060,-3.403,-7.152, 6.286, 0.0000,0.769,0.310),
+c("GO:0019538","protein metabolic process",18.489,-0.950, 6.815, 6.375, 0.0000,0.869,0.339),
+c("GO:0072521","purine-containing compound metabolic process", 2.673,-5.665, 0.029, 5.535, 0.0000,0.744,0.357),
+c("GO:0072522","purine-containing compound biosynthetic process", 1.502,-6.315, 0.777, 5.285, 0.0000,0.669,0.361),
+c("GO:0071555","cell wall organization", 0.709, 4.128, 4.999, 4.959, 1.0000,0.915,0.375),
+c("GO:0044281","small molecule metabolic process",15.138,-3.256,-6.959, 6.288, 0.0000,0.769,0.415),
+c("GO:0006418","tRNA aminoacylation for protein translation", 1.099,-5.437,-1.496, 5.149, 0.0000,0.579,0.417),
+c("GO:0019439","aromatic compound catabolic process", 1.164,-2.172, 0.819, 5.174, 0.0000,0.775,0.425),
+c("GO:0044267","cellular protein metabolic process",14.293,-2.084, 5.969, 6.263, 0.0000,0.840,0.426),
+c("GO:0010256","endomembrane system organization", 0.189, 3.448, 4.288, 4.385, 1.0000,0.933,0.434),
+c("GO:0051236","establishment of RNA localization", 0.101, 6.361,-2.918, 4.111, 1.0000,0.836,0.472),
+c("GO:0006090","pyruvate metabolic process", 0.817,-3.803,-6.807, 5.021, 0.0000,0.669,0.475),
+c("GO:0042866","pyruvate biosynthetic process", 0.005,-5.049,-5.389, 2.780, 0.0000,0.737,0.488),
+c("GO:0006487","protein N-linked glycosylation", 0.076,-4.680,-1.784, 3.992, 1.0000,0.754,0.493),
+c("GO:0006403","RNA localization", 0.118, 5.789,-2.639, 4.179, 1.0000,0.856,0.497),
+c("GO:0045229","external encapsulating structure organization", 0.795, 3.535, 4.653, 5.009, 1.0000,0.925,0.498),
+c("GO:1901566","organonitrogen compound biosynthetic process",14.064,-6.317, 0.855, 6.256, 0.0000,0.682,0.506),
+c("GO:0055086","nucleobase-containing small molecule metabolic process", 4.917,-4.920,-4.419, 5.800, 0.0000,0.608,0.518),
+c("GO:0015849","organic acid transport", 1.024, 5.627,-3.839, 5.119, 1.0000,0.738,0.527),
+c("GO:0071166","ribonucleoprotein complex localization", 0.097, 6.117,-3.030, 4.094, 1.0000,0.845,0.529),
+c("GO:0006302","double-strand break repair", 0.211,-3.379, 4.862, 4.432, 1.0000,0.818,0.540),
+c("GO:0019725","cellular homeostasis", 1.253,-0.668,-7.416, 5.206, 1.0000,0.765,0.552),
+c("GO:0034645","cellular macromolecule biosynthetic process",19.291,-5.062, 3.332, 6.394, 0.0000,0.748,0.555),
+c("GO:0009059","macromolecule biosynthetic process",19.548,-5.044, 4.271, 6.399, 0.0000,0.779,0.558),
+c("GO:0006810","transport",17.616, 6.563,-2.324, 6.354, 1.0000,0.805,0.560),
+c("GO:0006556","S-adenosylmethionine biosynthetic process", 0.050,-2.714, 5.972, 3.810, 0.0000,0.838,0.562),
+c("GO:0015718","monocarboxylic acid transport", 0.155, 6.002,-1.867, 4.299, 1.0000,0.734,0.565),
+c("GO:0046394","carboxylic acid biosynthetic process", 4.159,-5.321,-4.037, 5.727, 0.0000,0.550,0.575),
+c("GO:0009072","aromatic amino acid family metabolic process", 0.719,-4.716,-4.801, 4.965, 0.0000,0.640,0.577),
+c("GO:0006414","translational elongation", 0.777,-6.028, 1.758, 4.999, 0.0000,0.721,0.577),
+c("GO:1901136","carbohydrate derivative catabolic process", 0.423,-0.138, 4.014, 4.735, 0.0000,0.814,0.582),
+c("GO:0044271","cellular nitrogen compound biosynthetic process",22.502,-6.173, 1.273, 6.460, 0.0000,0.709,0.587),
+c("GO:0006913","nucleocytoplasmic transport", 0.237, 5.489,-2.450, 4.483, 1.0000,0.813,0.587),
+c("GO:0046500","S-adenosylmethionine metabolic process", 0.090, 1.208, 5.818, 4.062, 0.0000,0.880,0.591),
+c("GO:0006082","organic acid metabolic process", 9.086,-3.977,-6.024, 6.067, 0.0000,0.606,0.592),
+c("GO:0051235","maintenance of location", 0.129, 5.215,-4.639, 4.219, 1.0000,0.853,0.593),
+c("GO:0006850","mitochondrial pyruvate transport", 0.015, 6.471,-1.564, 3.282, 1.0000,0.762,0.594),
+c("GO:0046434","organophosphate catabolic process", 0.365,-1.444, 0.855, 4.671, 0.0000,0.662,0.596),
+c("GO:0016043","cellular component organization", 7.239, 4.098, 5.023, 5.968, 1.0000,0.910,0.602),
+c("GO:0050657","nucleic acid transport", 0.100, 6.703,-0.731, 4.108, 1.0000,0.829,0.604),
+c("GO:0043038","amino acid activation", 1.124,-4.483,-4.976, 5.159, 0.0000,0.628,0.605),
+c("GO:0006811","ion transport", 5.344, 6.702,-2.153, 5.836, 1.0000,0.828,0.609),
+c("GO:0000041","transition metal ion transport", 0.344, 6.793,-1.351, 4.645, 1.0000,0.817,0.615),
+c("GO:0046474","glycerophospholipid biosynthetic process", 0.266,-5.351,-3.787, 4.534, 1.0000,0.590,0.635),
+c("GO:0016052","carbohydrate catabolic process", 1.078,-1.478,-2.051, 5.141, 0.0000,0.826,0.643),
+c("GO:0006826","iron ion transport", 0.133, 6.716,-1.102, 4.233, 1.0000,0.820,0.654),
+c("GO:0044283","small molecule biosynthetic process", 5.677,-5.610,-3.730, 5.862, 0.0000,0.590,0.654),
+c("GO:0006643","membrane lipid metabolic process", 0.382,-2.290,-7.585, 4.690, 1.0000,0.783,0.657),
+c("GO:0044249","cellular biosynthetic process",30.048,-6.423, 2.450, 6.586, 0.0000,0.762,0.658),
+c("GO:0033365","protein localization to organelle", 0.609, 6.157,-2.805, 4.893, 1.0000,0.806,0.684),
+c("GO:0051169","nuclear transport", 0.239, 5.501,-2.340, 4.486, 1.0000,0.829,0.684),
+c("GO:0055085","transmembrane transport", 8.916, 6.686,-2.407, 6.058, 1.0000,0.819,0.684),
+c("GO:0009312","oligosaccharide biosynthetic process", 0.248,-6.027,-3.322, 4.502, 0.0000,0.720,0.687),
+c("GO:0044272","sulfur compound biosynthetic process", 1.235,-4.762, 4.724, 5.200, 0.0000,0.829,0.689),
+c("GO:0000105","histidine biosynthetic process", 0.360,-5.721,-2.720, 4.664, 0.0000,0.617,0.691),
+c("GO:1901605","alpha-amino acid metabolic process", 3.625,-4.749,-4.604, 5.668, 0.0000,0.580,0.698));
+
+one.data <- data.frame(revigo.data);
+names(one.data) <- revigo.names;
+one.data <- one.data [(one.data$plot_X != "null" & one.data$plot_Y != "null"), ];
+one.data$plot_X <- as.numeric( as.character(one.data$plot_X) );
+one.data$plot_Y <- as.numeric( as.character(one.data$plot_Y) );
+one.data$plot_size <- as.numeric( as.character(one.data$plot_size) );
+one.data$frequency <- as.numeric( as.character(one.data$frequency) );
+one.data$uniqueness <- as.numeric( as.character(one.data$uniqueness) );
+one.data$dispensability <- as.numeric( as.character(one.data$dispensability) );
+ex <- one.data [ one.data$dispensability < 0.15, ]
+```
+
+
+```{r}
+
+one.data$value <- gsub('0', 'Down', one.data$value)
+one.data$value <- gsub('1', 'Up', one.data$value)
+
+reviGOplot <- ggplot( data = one.data ) +
+  geom_point( aes( plot_X, plot_Y, colour = value), alpha = I(0.6), size =7) +
+  scale_colour_manual(values =c("#3B9AB2", "red"), labels= c("Down", "Up")) +
+  geom_point( aes(plot_X, plot_Y), shape = 21, fill = "transparent", colour = I (alpha ("black", 0.6) ), size = 7) +   scale_size_area() + scale_size( range=c(5, 30)) + theme_bw() + theme(legend.key = element_blank()) + theme(text = element_text(size=14)) + theme(legend.title=element_blank()) +labs (y = "Axis 2", x = "Axis 1") +geom_text( data = ex, aes(plot_X, plot_Y, label = description), colour = I(alpha("black", 0.85)), size = 3 )
+
+#+geom_label_repel(data = ex, aes(plot_X, plot_Y, label = description), colour = I(alpha("black", 0.85)), size = 4, nudge_x = 0 , point.padding = 0.2, label.padding = 0.1)+ labs (y = "Axis 2", x = "Axis 1")
+# need library ggrepel 
+# install.packages("ggrepel")
+#library(ggrepel  
+
+reviGOplot
+```
+
+
+### treemap
+```{r, warning=FALSE}
+revigo.names <- c("term_ID","description","freqInDbPercent","value","uniqueness","dispensability","representative");
+revigo.data <- rbind(c("GO:0000726","non-recombinational repair",0.050,1.0000,0.867,0.000,"non-recombinational repair"),
+c("GO:0006302","double-strand break repair",0.211,1.0000,0.854,0.540,"non-recombinational repair"),
+c("GO:0006388","tRNA splicing, via endonucleolytic cleavage and ligation",0.040,1.0000,0.864,0.157,"non-recombinational repair"),
+c("GO:0072522","purine-containing compound biosynthetic process",1.502,1.0000,0.743,0.361,"non-recombinational repair"),
+c("GO:0072521","purine-containing compound metabolic process",2.673,1.0000,0.825,0.153,"non-recombinational repair"),
+c("GO:0034220","ion transmembrane transport",3.528,1.0000,0.609,0.000,"ion transmembrane transport"),
+c("GO:0050657","nucleic acid transport",0.100,1.0000,0.699,0.604,"ion transmembrane transport"),
+c("GO:0055085","transmembrane transport",8.916,1.0000,0.682,0.684,"ion transmembrane transport"),
+c("GO:0032507","maintenance of protein location in cell",0.057,1.0000,0.557,0.255,"ion transmembrane transport"),
+c("GO:0051235","maintenance of location",0.129,1.0000,0.740,0.593,"ion transmembrane transport"),
+c("GO:0051236","establishment of RNA localization",0.101,1.0000,0.712,0.472,"ion transmembrane transport"),
+c("GO:0000041","transition metal ion transport",0.344,1.0000,0.679,0.615,"ion transmembrane transport"),
+c("GO:0006810","transport",17.616,1.0000,0.659,0.560,"ion transmembrane transport"),
+c("GO:0006811","ion transport",5.344,1.0000,0.699,0.609,"ion transmembrane transport"),
+c("GO:0006826","iron ion transport",0.133,1.0000,0.685,0.654,"ion transmembrane transport"),
+c("GO:0071166","ribonucleoprotein complex localization",0.097,1.0000,0.727,0.529,"ion transmembrane transport"),
+c("GO:0006850","mitochondrial pyruvate transport",0.015,1.0000,0.635,0.594,"ion transmembrane transport"),
+c("GO:0006839","mitochondrial transport",0.182,1.0000,0.775,0.296,"ion transmembrane transport"),
+c("GO:0033365","protein localization to organelle",0.609,1.0000,0.661,0.684,"ion transmembrane transport"),
+c("GO:0019725","cellular homeostasis",1.253,1.0000,0.766,0.552,"ion transmembrane transport"),
+c("GO:0015849","organic acid transport",1.024,1.0000,0.618,0.527,"ion transmembrane transport"),
+c("GO:0006403","RNA localization",0.118,1.0000,0.744,0.497,"ion transmembrane transport"),
+c("GO:0015931","nucleobase-containing compound transport",0.198,1.0000,0.706,0.299,"ion transmembrane transport"),
+c("GO:0015718","monocarboxylic acid transport",0.155,1.0000,0.599,0.565,"ion transmembrane transport"),
+c("GO:0006913","nucleocytoplasmic transport",0.237,1.0000,0.672,0.587,"ion transmembrane transport"),
+c("GO:0051169","nuclear transport",0.239,1.0000,0.699,0.684,"ion transmembrane transport"),
+c("GO:0051179","localization",18.495,1.0000,0.985,0.000,"localization"),
+c("GO:0065008","regulation of biological quality",3.395,1.0000,0.946,0.000,"regulation of biological quality"),
+c("GO:0071840","cellular component organization or biogenesis",8.568,1.0000,0.983,0.000,"cellular component organization or biogenesis"),
+c("GO:0007029","endoplasmic reticulum organization",0.032,1.0000,0.925,0.021,"endoplasmic reticulum organization"),
+c("GO:0071555","cell wall organization",0.709,1.0000,0.891,0.375,"endoplasmic reticulum organization"),
+c("GO:0016043","cellular component organization",7.239,1.0000,0.897,0.602,"endoplasmic reticulum organization"),
+c("GO:0045229","external encapsulating structure organization",0.795,1.0000,0.909,0.498,"endoplasmic reticulum organization"),
+c("GO:0010256","endomembrane system organization",0.189,1.0000,0.917,0.434,"endoplasmic reticulum organization"),
+c("GO:0071554","cell wall organization or biogenesis",0.950,1.0000,0.948,0.027,"cell wall organization or biogenesis"),
+c("GO:0090407","organophosphate biosynthetic process",4.110,1.0000,0.611,0.055,"organophosphate biosynthesis"),
+c("GO:1901137","carbohydrate derivative biosynthetic process",3.651,1.0000,0.794,0.255,"organophosphate biosynthesis"),
+c("GO:0006487","protein N-linked glycosylation",0.076,1.0000,0.782,0.493,"organophosphate biosynthesis"),
+c("GO:0017144","drug metabolic process",0.058,1.0000,0.938,0.056,"drug metabolism"),
+c("GO:0046486","glycerolipid metabolic process",0.593,1.0000,0.798,0.072,"glycerolipid metabolism"),
+c("GO:0006643","membrane lipid metabolic process",0.382,1.0000,0.805,0.657,"glycerolipid metabolism"),
+c("GO:0046474","glycerophospholipid biosynthetic process",0.266,1.0000,0.624,0.635,"glycerolipid metabolism"),
+c("GO:0006000","fructose metabolic process",0.022,1.0000,0.833,0.116,"glycerolipid metabolism"),
+c("GO:1901135","carbohydrate derivative metabolic process",6.319,1.0000,0.934,0.075,"carbohydrate derivative metabolism"));
 
 stuff <- data.frame(revigo.data);
 names(stuff) <- revigo.names;
@@ -400,50 +590,52 @@ stuff$freqInDbPercent <- as.numeric( as.character(stuff$freqInDbPercent) );
 stuff$uniqueness <- as.numeric( as.character(stuff$uniqueness) );
 stuff$dispensability <- as.numeric( as.character(stuff$dispensability) );
 
-treemap(
+
+#colors
+j1<- wes_palette("Darjeeling1")
+Dj1<- wes_palette("Darjeeling2")
+Cv <- wes_palette("Cavalcanti1")
+Gb<- wes_palette("GrandBudapest1")
+Gb2<- wes_palette("GrandBudapest2")
+Br<- wes_palette("BottleRocket2")
+Rm<- wes_palette("Rushmore1")
+R2<-wes_palette("Royal2")
+mr3<- wes_palette("Moonrise3")
+wpcolor<- c( Dj1[1:4], "blue", j1[1:4], R2[3],Cv[1:3],Br[1:4], Rm[2:4], Gb2,mr3,Gb[2:4], "white" )
+
+
+#pdf( file="revigo_treemap.pdf", width=16, height=9 ) # width and height are in inches
+
+# check the tmPlot command documentation for all possible parameters - there are a lot more
+tmPlot(
 	stuff,
 	index = c("representative","description"),
 	vSize = "uniqueness",
 	type = "categorical",
 	vColor = "representative",
-	palette = wes_palette("BottleRocket2"),
 	title = "REVIGO Gene Ontology treemap",
 	inflate.labels = FALSE,      # set this to TRUE for space-filling group labels - good for posters
+	palette = wpcolor,
 	lowerbound.cex.labels = 0,   # try to draw as many labels as possible (still, some small squares may not get a label)
 	bg.labels = "#CCCCCCAA",     # define background color of group labels
 												       # "#CCCCCC00" is fully transparent, "#CCCCCCAA" is semi-transparent grey, NA is opaque
 	position.legend = "none"
 )
 
-```
+#dev.off()
 
+```
 
 
 ## GUI Options 
+Need EnsembleIDs (or sometimes another standard gene ID format) - easiest to use if you have mapped to an annotated published genome or transcriptome, especially when working with model organisms
 
-Get upregulated gene IDs for David: https://david.ncifcrf.gov/gene2gene.jsp
-```{r}
-UpEnsemble <- upFrame$ENSEMBL[!is.na(upFrame$ENSEMBL)]
-write.csv(UpEnsemble, "upEnsembleIDs.csv", row.names = FALSE, col.names = FALSE, quote = FALSE )
-```
-- Look in the files pane, open `upEnsembleIDs.csv`
-- delete the "x" header
-- copy all (command A)
-- paste into DAVID website
-**12 "clusters" of genes by function**
+David: https://david.ncifcrf.gov/gene2gene.jsp
 
-
-for GOrilla:
+GOrilla:
 http://cbl-gorilla.cs.technion.ac.il/
         
-- Look in the files pane, open `upEnsembleIDs.csv`          
-- delete the "x" header           
-- copy all (command A)            
-- paste into GOrilla website        
-- shows GO hierarchical organization        
-- shows all enriched GO terms (nested)        
-- function `enrichGO` in clusterProfiler package        
-
+## KEGG
 KEGG annotation and pathway enrichment is another type of functional enrichment that can be more useful than GO terms. 
 https://www.kegg.jp/
 

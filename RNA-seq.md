@@ -489,3 +489,71 @@ example if running paired-end data:
 ***we will copy the quant files to our local computer and continue the analysis in R***
 
 `scp -r maggi-brisbin@tombo.oist.jp:/home/m/maggi-brisbin/RNAseq/yeast_salmon/quants  .`
+
+---------
+Once the dammit annotation finishes, we can look at the quality assessment of our transcriptome and move the annotation results to our local computers.
+
+`cd RNAseq/yeast_dammit/Trinity.fasta.dammit`
+
+Look at the BUSCO scores first:     
+
+`cd run_Trinity.fasta.eukaryota.busco.results`              
+`cat short_summary_Trinity.fasta.eukaryota.busco.results.txt`
+
+    # BUSCO version is: 3.0.2
+    # The lineage dataset is: eukaryota_odb9 (Creation date: 2016-11-02, number of species: 100, number of BUSCOs: 303)
+    # To reproduce this run: python /work/scratch/skillpill/RNA-seq/miniconda3/envs/RNA-seq/bin/run_BUSCO.py -i /home/m/maggi-brisbin/RNAseq/yeast_dammit/Trinity.fasta.dammit/Trinity.fasta -o Trinity.fasta.eukaryota.busco.results -l /home/m/maggi-brisbin/RNAseq/dammit_db/busco2db/eukaryota_odb9/ -m transcriptome -c 12
+    #
+    # Summarized benchmarking in BUSCO notation for file /home/m/maggi-brisbin/RNAseq/yeast_dammit/Trinity.fasta.dammit/Trinity.fasta
+    # BUSCO was run in mode: transcriptome
+
+    	C:69.7%[S:68.0%,D:1.7%],F:19.5%,M:10.8%,n:303
+
+    	211	Complete BUSCOs (C)
+    	206	Complete and single-copy BUSCOs (S)
+    	5	Complete and duplicated BUSCOs (D)
+    	59	Fragmented BUSCOs (F)
+    	33	Missing BUSCOs (M)
+    	303	Total BUSCO groups searched
+
+*What does this mean?*
+
+next lets look at some summary statistics:
+
+`cd .. `
+
+`cat Trinity.fasta.dammit.stats.json`
+
+
+    "N": 9465,
+    "sum": 7550704,
+    "min": 201,
+    "max": 7329,
+    "med": 536,
+    "mean": 797.750026413101,
+    "N50len": 818,
+    "N50pos": 4819,
+    "25_mers": 7304614,
+    "25_mers_unique": 7181640,
+    "n_ambiguous": 0,
+    "redundancy": 0.016835112710952282,
+    "GCperc": 0.3928472100084972
+
+*What does this mean?*
+
+Next, move the annotation files we need for functional enrichment analysis to your local computer
+
+`Trinity.fasta.dammit.namemap.csv`      
+`Trinity.fasta.x.pfam-A.csv`     
+
+you'll also need this:      
+`wget https://raw.githubusercontent.com/maggimars/rnaSkillPill/master/pfam2go4R.txt`
+
+or if you are a curl user:        
+`curl -L https://raw.githubusercontent.com/maggimars/rnaSkillPill/master/pfam2go4R.txt -o pfam2go4R.txt`
+
+AND get the updated R markdown file:        
+`wget https://raw.githubusercontent.com/maggimars/rnaSkillPill/master/R_RNA.Rmd`
+
+or curl:          
+`curl -L https://raw.githubusercontent.com/maggimars/rnaSkillPill/master/R_RNA.Rmd -o RNA-seq.`
