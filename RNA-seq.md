@@ -556,4 +556,4 @@ AND get the updated R markdown file:
 `wget https://raw.githubusercontent.com/maggimars/rnaSkillPill/master/R_RNA.Rmd`
 
 or curl:          
-`curl -L https://raw.githubusercontent.com/maggimars/rnaSkillPill/master/R_RNA.Rmd -o RNA-seq.`
+`curl -L https://raw.githubusercontent.com/maggimars/rnaSkillPill/master/R_RNA.Rmd -o RNA-seq.Rmd`
